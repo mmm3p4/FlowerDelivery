@@ -1,0 +1,206 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Доставка цветов</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+        }
+
+        .user-info {
+            text-align: right;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .user-role {
+            color: #667eea;
+            font-size: 0.9em;
+        }
+
+        .btn-logout {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+            .btn-logout:hover {
+                background: #ff5252;
+            }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .nav-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+            .nav-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            }
+
+            .nav-card h3 {
+                font-size: 1.5em;
+                margin-bottom: 10px;
+            }
+
+            .nav-card p {
+                opacity: 0.9;
+            }
+
+
+        .welcome-message {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌸 Доставка цветов</h1>
+            <div class="user-info">
+                <div class="user-name" id="userName">Загрузка...</div>
+                <div class="user-role" id="userRole">Загрузка...</div>
+                <button class="btn-logout" onclick="logout()">Выйти</button>
+            </div>
+        </div>
+
+        <div class="welcome-message" id="welcomeMessage">Добро пожаловать в систему!</div>
+
+        <div class="nav-grid" id="navGrid">
+
+        </div>
+    </div>
+
+    <script>
+
+        const userId = localStorage.getItem('userId');
+        const userRole = localStorage.getItem('userRole');
+        const userName = localStorage.getItem('userName');
+
+        if (!userId) {
+            window.location.href = 'login.html';
+        }
+
+
+        document.getElementById('userName').textContent = userName || 'Пользователь';
+        document.getElementById('userRole').textContent = getRoleName(userRole);
+
+        const navGrid = document.getElementById('navGrid');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+
+        if (userRole === 'Client') {
+            welcomeMessage.textContent = 'Добро пожаловать! Выберите действие:';
+            navGrid.innerHTML = `
+                <a href="catalog.html" class="nav-card">
+                    <h3>Каталог букетов</h3>
+                    <p>Просмотреть доступные букеты</p>
+                </a>
+                <a href="order.html" class="nav-card">
+                    <h3>Создать заказ</h3>
+                    <p>Оформить доставку цветов</p>
+                </a>
+                <a href="track.html" class="nav-card">
+                    <h3>Мои заказы</h3>
+                    <p>Отследить статус доставки</p>
+                </a>
+            `;
+        } else if (userRole === 'Courier') {
+            welcomeMessage.textContent = 'Панель управления курьера:';
+            navGrid.innerHTML = `
+                <a href="courier.html" class="nav-card">
+                    <h3>Мои доставки</h3>
+                    <p>Просмотр назначенных доставок</p>
+                </a>
+            `;
+        } else if (userRole === 'Admin') {
+            welcomeMessage.textContent = 'Панель администратора:';
+            navGrid.innerHTML = `
+                <a href="catalog.html?mode=admin" class="nav-card">
+                    <h3>Управление каталогом</h3>
+                    <p>Добавление и редактирование букетов</p>
+                </a>
+                <a href="orders-admin.html" class="nav-card">
+                    <h3>Управление заказами</h3>
+                    <p>Просмотр и назначение курьеров</p>
+                </a>
+                <a href="couriers.html" class="nav-card">
+                    <h3>Справочник курьеров</h3>
+                    <p>Управление курьерами</p>
+                </a>
+            `;
+        }
+
+        function getRoleName(role) {
+            const roles = {
+                'Client': 'Клиент',
+                'Courier': 'Курьер',
+                'Admin': 'Администратор'
+            };
+            return roles[role] || role;
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>
