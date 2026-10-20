@@ -1,6 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using FlowerDelivery.Application.DTOs;
 using FlowerDelivery.Application.Services;
-using FlowerDelivery.Application.DTOs;
+using FlowerDelivery.Domain.Entities;
+using FlowerDelivery.Infrastructure.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FlowerDelivery.API.Controllers;
 
@@ -9,13 +12,46 @@ namespace FlowerDelivery.API.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly OrderService _orderService;
+    private readonly ApplicationDbContext _context;
 
-    public OrdersController(OrderService orderService)
+    public OrdersController(OrderService orderService, ApplicationDbContext context)
     {
         _orderService = orderService;
+        _context = context;
     }
 
-    // POST: api/orders
+    [HttpGet]
+    public async Task<ActionResult<List<OrderResponseDto>>> GetAllOrders()
+    {
+        var orders = await _context.Orders
+            .Include(o => o.Items).ThenInclude(i => i.Bouquet)
+            .Include(o => o.Delivery)
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync();
+
+        return Ok(orders);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<OrderResponseDto>> GetOrder(int id)
+    {
+        var order = await _orderService.GetOrderByIdAsync(id);
+
+        if (order == null)
+        {
+            return NotFound();
+        }
+
+        return order;
+    }
+
+    [HttpGet("client/{clientId}")]
+    public async Task<ActionResult<List<OrderResponseDto>>> GetOrdersByClient(int clientId)
+    {
+        var orders = await _orderService.GetOrdersByClientIdAsync(clientId);
+        return Ok(orders);
+    }
+
     [HttpPost]
     public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
     {
@@ -30,25 +66,58 @@ public class OrdersController : ControllerBase
         }
     }
 
-    // GET: api/orders/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<OrderResponseDto>> GetOrder(int id)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateOrder(int id, [FromBody] UpdateOrderDto dto)
     {
-        var order = await _orderService.GetOrderByIdAsync(id);
+        try
+        {
+            var order = await _orderService.UpdateOrderAsync(id, dto);
+
+            if (order == null)
+            {
+                return NotFound(new { message = "Заказ не найден" });
+            }
+
+            return Ok(order);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> CancelOrder(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .Include(o => o.Delivery)
+            .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
         {
-            return NotFound();
+            return NotFound(new { message = "Заказ не найден" });
         }
 
-        return order;
-    }
+        if (order.Status == OrderStatus.InDelivery ||
+            order.Status == OrderStatus.Delivered)
+        {
+            return BadRequest(new { message = "Нельзя отменить заказ, который уже в доставке или доставлен" });
+        }
 
-    // GET: api/orders/client/5
-    [HttpGet("client/{clientId}")]
-    public async Task<ActionResult<List<OrderResponseDto>>> GetOrdersByClient(int clientId)
-    {
-        var orders = await _orderService.GetOrdersByClientIdAsync(clientId);
-        return Ok(orders);
+        foreach (var item in order.Items)
+        {
+            var bouquet = await _context.Bouquets.FindAsync(item.BouquetId);
+            if (bouquet != null)
+            {
+                bouquet.StockQuantity += item.Quantity;
+            }
+        }
+
+        order.Status = OrderStatus.Cancelled;
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Заказ отменён", orderId = id });
     }
 }

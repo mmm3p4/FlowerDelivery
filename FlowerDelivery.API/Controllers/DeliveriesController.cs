@@ -16,7 +16,6 @@ public class DeliveriesController : ControllerBase
         _context = context;
     }
 
-    // GET: api/deliveries
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Delivery>>> GetAllDeliveries()
     {
@@ -28,7 +27,6 @@ public class DeliveriesController : ControllerBase
         return Ok(deliveries);
     }
 
-    // GET: api/deliveries/courier/5
     [HttpGet("courier/{courierId}")]
     public async Task<ActionResult<List<Delivery>>> GetDeliveriesByCourier(int courierId)
     {
@@ -40,7 +38,22 @@ public class DeliveriesController : ControllerBase
         return Ok(deliveries);
     }
 
-    // PUT: api/deliveries/5/assign-courier
+    [HttpGet("{id}")]
+    public async Task<ActionResult<Delivery>> GetDelivery(int id)
+    {
+        var delivery = await _context.Deliveries
+            .Include(d => d.Order)
+            .Include(d => d.Courier)
+            .FirstOrDefaultAsync(d => d.Id == id);
+
+        if (delivery == null)
+        {
+            return NotFound(new { message = "Доставка не найдена" });
+        }
+
+        return Ok(delivery);
+    }
+
     [HttpPut("{id}/assign-courier")]
     public async Task<IActionResult> AssignCourier(int id, [FromBody] AssignCourierDto dto)
     {
@@ -73,7 +86,6 @@ public class DeliveriesController : ControllerBase
         return Ok(new { message = "Курьер успешно назначен" });
     }
 
-    // PUT: api/deliveries/5/confirm
     [HttpPut("{id}/confirm")]
     public async Task<IActionResult> ConfirmDelivery(int id)
     {
@@ -104,7 +116,6 @@ public class DeliveriesController : ControllerBase
         return Ok(new { message = "Доставка подтверждена" });
     }
 
-    // PUT: api/deliveries/5/return
     [HttpPut("{id}/return")]
     public async Task<IActionResult> ReturnDelivery(int id)
     {
@@ -133,6 +144,30 @@ public class DeliveriesController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok(new { message = "Заказ возвращён" });
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteDelivery(int id)
+    {
+        var delivery = await _context.Deliveries
+            .Include(d => d.Order)
+            .FirstOrDefaultAsync(d => d.Id == id);
+
+        if (delivery == null)
+        {
+            return NotFound(new { message = "Доставка не найдена" });
+        }
+
+        if (delivery.Status == DeliveryStatus.InProgress ||
+            delivery.Status == DeliveryStatus.Completed)
+        {
+            return BadRequest(new { message = "Нельзя удалить доставку, которая уже в процессе или завершена" });
+        }
+
+        _context.Deliveries.Remove(delivery);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 }
 

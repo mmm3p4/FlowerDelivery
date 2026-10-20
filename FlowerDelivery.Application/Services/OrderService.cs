@@ -108,6 +108,43 @@ public class OrderService
         return orders.Select(MapToResponseDto).ToList();
     }
 
+    // Обновление заказа
+    public async Task<OrderResponseDto?> UpdateOrderAsync(int id, UpdateOrderDto dto)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Delivery)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+            return null;
+
+
+        if (order.Status == OrderStatus.InDelivery ||
+            order.Status == OrderStatus.Delivered)
+        {
+            throw new Exception("Нельзя изменить заказ, который уже передан в доставку или доставлен");
+        }
+
+        if (dto.RecipientName != null)
+            order.RecipientName = dto.RecipientName;
+
+        if (dto.RecipientPhone != null)
+            order.RecipientPhone = dto.RecipientPhone;
+
+        if (order.Delivery != null)
+        {
+            if (dto.DeliveryAddress != null)
+                order.Delivery.Address = dto.DeliveryAddress;
+
+            if (dto.DeliveryTime.HasValue)
+                order.Delivery.DeliveryTime = DateTime.SpecifyKind(dto.DeliveryTime.Value, DateTimeKind.Utc);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return await GetOrderByIdAsync(id);
+    }
+
     private OrderResponseDto MapToResponseDto(Order order)
     {
         return new OrderResponseDto
