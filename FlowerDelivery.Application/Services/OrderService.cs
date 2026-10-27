@@ -68,7 +68,6 @@ public class OrderService
         {
             Address = dto.DeliveryAddress,
             DeliveryTime = DateTime.SpecifyKind(dto.DeliveryTime, DateTimeKind.Utc),
-            Status = DeliveryStatus.Assigned,
             Order = order
         };
 
@@ -77,7 +76,8 @@ public class OrderService
         _context.Orders.Add(order);
         await _context.SaveChangesAsync();
 
-        return await GetOrderByIdAsync(order.Id);
+        return await GetOrderByIdAsync(order.Id)
+            ?? throw new Exception("Заказ не найден после создания");
     }
 
     public async Task<OrderResponseDto?> GetOrderByIdAsync(int id)
@@ -168,7 +168,6 @@ public class OrderService
                 Id = order.Delivery.Id,
                 Address = order.Delivery.Address,
                 DeliveryTime = order.Delivery.DeliveryTime,
-                Status = order.Delivery.Status.ToString(),
                 CourierId = order.Delivery.CourierId
             } : null
         };

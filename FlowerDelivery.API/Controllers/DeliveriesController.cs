@@ -73,7 +73,7 @@ public class DeliveriesController : ControllerBase
         }
 
         delivery.CourierId = dto.CourierId;
-        delivery.Status = DeliveryStatus.InProgress;
+
         courier.Status = CourierStatus.Busy;
 
         if (delivery.Order != null)
@@ -98,8 +98,6 @@ public class DeliveriesController : ControllerBase
         {
             return NotFound();
         }
-
-        delivery.Status = DeliveryStatus.Completed;
 
         if (delivery.Order != null)
         {
@@ -129,8 +127,6 @@ public class DeliveriesController : ControllerBase
             return NotFound();
         }
 
-        delivery.Status = DeliveryStatus.Returned;
-
         if (delivery.Order != null)
         {
             delivery.Order.Status = OrderStatus.Returned;
@@ -158,10 +154,11 @@ public class DeliveriesController : ControllerBase
             return NotFound(new { message = "Доставка не найдена" });
         }
 
-        if (delivery.Status == DeliveryStatus.InProgress ||
-            delivery.Status == DeliveryStatus.Completed)
+        if (delivery.Order != null &&
+            (delivery.Order.Status == OrderStatus.InDelivery ||
+             delivery.Order.Status == OrderStatus.Delivered))
         {
-            return BadRequest(new { message = "Нельзя удалить доставку, которая уже в процессе или завершена" });
+            return BadRequest(new { message = "Нельзя удалить доставку, если заказ уже в пути или доставлен" });
         }
 
         _context.Deliveries.Remove(delivery);
