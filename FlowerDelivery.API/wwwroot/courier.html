@@ -1,0 +1,195 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель курьера — FlowerDelivery</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        header {
+            background: #d63384;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+        }
+
+        nav a {
+            color: white;
+            margin-right: 15px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .delivery-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+            .delivery-card h3 {
+                color: #d63384;
+                margin-bottom: 10px;
+            }
+
+        .info-row {
+            margin: 8px 0;
+        }
+
+            .info-row strong {
+                display: inline-block;
+                width: 180px;
+            }
+
+        .btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+            .btn:hover {
+                background: #218838;
+            }
+
+            .btn:disabled {
+                background: #6c757d;
+                cursor: not-allowed;
+            }
+
+        .status-InDelivery {
+            background: #fff3cd;
+            border-left: 4px solid #fd7e14;
+        }
+
+        .status-Delivered {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container" style="background: transparent; box-shadow: none; padding: 0;">
+            <h1>🌸 FlowerDelivery — Панель курьера</h1>
+            <nav>
+                <a href="catalog.html">Каталог</a>
+                <a href="order.html">Создать заказ</a>
+                <a href="track.html">Отследить заказ</a>
+                <a href="courier.html">Панель курьера</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2 style="margin-bottom: 20px;">Мои доставки</h2>
+        <div id="message"></div>
+        <div id="deliveries">
+            <p>Загрузка...</p>
+        </div>
+    </div>
+
+    <script>
+        const COURIER_ID = 2; //для демки
+
+        async function loadDeliveries() {
+            try {
+                const response = await fetch(`/api/Deliveries/courier/${COURIER_ID}`);
+
+                if (!response.ok) {
+                    document.getElementById('deliveries').innerHTML =
+                        '<p>Нет назначенных доставок или метод не реализован.</p>';
+                    return;
+                }
+
+                const deliveries = await response.json();
+
+                if (deliveries.length === 0) {
+                    document.getElementById('deliveries').innerHTML = '<p>У вас нет назначенных доставок.</p>';
+                    return;
+                }
+
+                document.getElementById('deliveries').innerHTML = deliveries.map(d => `
+                    <div class="delivery-card status-${d.order?.status || 'Unknown'}">
+                        <h3>Доставка #${d.id}</h3>
+                        <div class="info-row"><strong>Адрес:</strong> ${d.address}</div>
+                        <div class="info-row"><strong>Время:</strong> ${new Date(d.deliveryTime).toLocaleString('ru-RU')}</div>
+                        <div class="info-row"><strong>Заказ #:</strong> ${d.orderId}</div>
+                        <div class="info-row"><strong>Статус заказа:</strong> ${d.order?.status || 'неизвестно'}</div>
+                        ${d.order?.status === 'InDelivery' ?
+                            `<button class="btn" onclick="confirmDelivery(${d.id})">✓ Подтвердить доставку</button>` :
+                            `<button class="btn" disabled>Доставка завершена</button>`
+                        }
+                    </div>
+                `).join('');
+            } catch (err) {
+                document.getElementById('deliveries').innerHTML =
+                    `<div class="error">Ошибка загрузки: ${err.message}</div>`;
+            }
+        }
+
+        async function confirmDelivery(id) {
+            try {
+                const response = await fetch(`/api/Deliveries/${id}/confirm`, { method: 'PUT' });
+
+                if (!response.ok) {
+                    document.getElementById('message').innerHTML =
+                        '<div class="error">Ошибка подтверждения доставки</div>';
+                    return;
+                }
+
+                document.getElementById('message').innerHTML =
+                    '<div class="success">✓ Доставка успешно подтверждена!</div>';
+
+                setTimeout(() => loadDeliveries(), 1000);
+            } catch (err) {
+                document.getElementById('message').innerHTML =
+                    `<div class="error">Ошибка: ${err.message}</div>`;
+            }
+        }
+
+        loadDeliveries();
+    </script>
+</body>
+</html>

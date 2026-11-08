@@ -16,23 +16,37 @@ public class OrderService
 
     public async Task<OrderResponseDto> CreateOrderAsync(CreateOrderDto dto)
     {
-        var bouquetIds = dto.Items.Select(i => i.BouquetId).ToList();
+        if (dto.DeliveryTime <= DateTime.UtcNow)
+        {
+            throw new InvalidOperationException("Время доставки должно быть в будущем");
+        }
+
+        var client = await _context.Clients.FindAsync(dto.ClientId);
+        if (client == null)
+        {
+            throw new InvalidOperationException($"Клиент с ID {dto.ClientId} не найден");
+        }
+
+        var bouquetIds = dto.Items.Select(i => i.BouquetId).Distinct().ToList();
         var bouquets = await _context.Bouquets
             .Where(b => bouquetIds.Contains(b.Id))
             .ToListAsync();
 
         if (bouquets.Count != bouquetIds.Count)
         {
-            throw new Exception("Один или несколько букетов не найдены");
+            var foundIds = bouquets.Select(b => b.Id).ToList();
+            var missingIds = bouquetIds.Where(id => !foundIds.Contains(id)).ToList();
+            throw new InvalidOperationException($"Букеты с ID {string.Join(", ", missingIds)} не найдены");
         }
-
 
         foreach (var item in dto.Items)
         {
             var bouquet = bouquets.First(b => b.Id == item.BouquetId);
             if (bouquet.StockQuantity < item.Quantity)
             {
-                throw new Exception($"Букет '{bouquet.Name}' недоступен в количестве {item.Quantity}. Остаток: {bouquet.StockQuantity}");
+                throw new InvalidOperationException(
+                    $"Недостаточно букета '{bouquet.Name}' на складе. " +
+                    $"Доступно: {bouquet.StockQuantity}, запрошено: {item.Quantity}");
             }
         }
 
@@ -58,7 +72,6 @@ public class OrderService
             };
             order.Items.Add(orderItem);
             totalAmount += orderItem.Price;
-
             bouquet.StockQuantity -= item.Quantity;
         }
 
@@ -71,13 +84,11 @@ public class OrderService
             Order = order
         };
 
-        order.Delivery = delivery;
-
+        _context.Deliveries.Add(delivery);
         _context.Orders.Add(order);
         await _context.SaveChangesAsync();
 
-        return await GetOrderByIdAsync(order.Id)
-            ?? throw new Exception("Заказ не найден после создания");
+        return await GetOrderByIdAsync(order.Id);
     }
 
     public async Task<OrderResponseDto?> GetOrderByIdAsync(int id)
@@ -140,6 +151,49 @@ public class OrderService
                 order.Delivery.DeliveryTime = DateTime.SpecifyKind(dto.DeliveryTime.Value, DateTimeKind.Utc);
         }
 
+        await _context.SaveChangesAsync();
+
+        return await GetOrderByIdAsync(id);
+    }
+
+    public async Task<OrderResponseDto?> PayOrderAsync(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+            return null;
+
+        // Можно оплатить только созданный заказ
+        if (order.Status != OrderStatus.Created)
+        {
+            throw new InvalidOperationException($"Нельзя оплатить заказ со статусом {order.Status}. Заказ должен быть в статусе Created");
+        }
+
+        order.Status = OrderStatus.Paid;
+        await _context.SaveChangesAsync();
+
+        return await GetOrderByIdAsync(id);
+    }
+
+    // Подготовка заказа флористом
+    public async Task<OrderResponseDto?> PrepareOrderAsync(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+            return null;
+
+        // Подготовить можно только оплаченный заказ
+        if (order.Status != OrderStatus.Paid)
+        {
+            throw new InvalidOperationException($"Нельзя подготовить заказ со статусом {order.Status}. Заказ должен быть в статусе Paid");
+        }
+
+        order.Status = OrderStatus.ReadyForDelivery;
         await _context.SaveChangesAsync();
 
         return await GetOrderByIdAsync(id);

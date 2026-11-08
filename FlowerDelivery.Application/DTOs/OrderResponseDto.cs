@@ -26,6 +26,5 @@ public class DeliveryResponseDto
     public int Id { get; set; }
     public string Address { get; set; } = string.Empty;
     public DateTime DeliveryTime { get; set; }
-    public string Status { get; set; } = string.Empty;
     public int? CourierId { get; set; }
 }

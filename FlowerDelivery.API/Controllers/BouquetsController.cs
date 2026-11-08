@@ -1,7 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using FlowerDelivery.Infrastructure.Data;
+﻿using FlowerDelivery.Application.DTOs;
 using FlowerDelivery.Domain.Entities;
+using FlowerDelivery.Infrastructure.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FlowerDelivery.API.Controllers;
 
@@ -36,8 +37,17 @@ public class BouquetsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Bouquet>> CreateBouquet(Bouquet bouquet)
+    public async Task<ActionResult<Bouquet>> CreateBouquet([FromBody] CreateBouquetDto dto)
     {
+        var bouquet = new Bouquet
+        {
+            Name = dto.Name,
+            Description = dto.Description,
+            Price = dto.Price,
+            StockQuantity = dto.StockQuantity,
+            ImagePath = dto.ImagePath
+        };
+
         _context.Bouquets.Add(bouquet);
         await _context.SaveChangesAsync();
 
@@ -45,31 +55,18 @@ public class BouquetsController : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateBouquet(int id, Bouquet bouquet)
+    public async Task<IActionResult> UpdateBouquet(int id, [FromBody] CreateBouquetDto dto)
     {
-        if (id != bouquet.Id)
-        {
-            return BadRequest(new { message = "ID букета не совпадает" });
-        }
+        var bouquet = await _context.Bouquets.FindAsync(id);
+        if (bouquet == null) return NotFound();
 
-        _context.Entry(bouquet).State = EntityState.Modified;
+        bouquet.Name = dto.Name;
+        bouquet.Description = dto.Description;
+        bouquet.Price = dto.Price;
+        bouquet.StockQuantity = dto.StockQuantity;
+        bouquet.ImagePath = dto.ImagePath;
 
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!BouquetExists(id))
-            {
-                return NotFound(new { message = "Букет не найден" });
-            }
-            else
-            {
-                throw;
-            }
-        }
-
+        await _context.SaveChangesAsync();
         return NoContent();
     }
 

@@ -120,4 +120,45 @@ public class OrdersController : ControllerBase
 
         return Ok(new { message = "Заказ отменён", orderId = id });
     }
+    // POST: api/orders/5/pay — Оплата заказа
+    [HttpPost("{id}/pay")]
+    public async Task<IActionResult> PayOrder(int id)
+    {
+        try
+        {
+            var order = await _orderService.PayOrderAsync(id);
+
+            if (order == null)
+            {
+                return NotFound(new { message = "Заказ не найден" });
+            }
+
+            return Ok(new { message = "Заказ оплачен", order });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // PUT: api/orders/5/prepare — Подготовка заказа флористом
+    [HttpPut("{id}/prepare")]
+    public async Task<IActionResult> PrepareOrder(int id)
+    {
+        try
+        {
+            var order = await _orderService.PrepareOrderAsync(id);
+
+            if (order == null)
+            {
+                return NotFound(new { message = "Заказ не найден" });
+            }
+
+            return Ok(new { message = "Заказ готов к доставке", order });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
