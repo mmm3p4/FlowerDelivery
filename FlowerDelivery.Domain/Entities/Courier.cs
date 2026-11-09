@@ -5,7 +5,7 @@ public class Courier : User
     public string Phone { get; set; } = string.Empty;
     public CourierStatus Status { get; set; } = CourierStatus.Free;
 
-    public ICollection<Delivery> Deliveries { get; set; } = new List<Delivery>();
+    public ICollection<Delivery> Deliveries { get; set; } = [];
 }
 
 public enum CourierStatus

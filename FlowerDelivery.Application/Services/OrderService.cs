@@ -1,18 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using FlowerDelivery.Domain.Entities;
-using FlowerDelivery.Infrastructure.Data;
+using FlowerDelivery.Infrastructure;
 using FlowerDelivery.Application.DTOs;
 
 namespace FlowerDelivery.Application.Services;
 
-public class OrderService
+public class OrderService(ApplicationDbContext context)
 {
-    private readonly ApplicationDbContext _context;
-
-    public OrderService(ApplicationDbContext context)
-    {
-        _context = context;
-    }
+    private readonly ApplicationDbContext _context = context;
 
     public async Task<OrderResponseDto> CreateOrderAsync(CreateOrderDto dto)
     {
@@ -21,12 +16,7 @@ public class OrderService
             throw new InvalidOperationException("Время доставки должно быть в будущем");
         }
 
-        var client = await _context.Clients.FindAsync(dto.ClientId);
-        if (client == null)
-        {
-            throw new InvalidOperationException($"Клиент с ID {dto.ClientId} не найден");
-        }
-
+        var client = await _context.Clients.FindAsync(dto.ClientId) ?? throw new InvalidOperationException($"Клиент с ID {dto.ClientId} не найден");
         var bouquetIds = dto.Items.Select(i => i.BouquetId).Distinct().ToList();
         var bouquets = await _context.Bouquets
             .Where(b => bouquetIds.Contains(b.Id))
@@ -57,7 +47,7 @@ public class OrderService
             RecipientPhone = dto.RecipientPhone,
             Status = OrderStatus.Created,
             CreatedAt = DateTime.UtcNow,
-            Items = new List<OrderItem>()
+            Items = []
         };
 
         decimal totalAmount = 0;
@@ -88,7 +78,8 @@ public class OrderService
         _context.Orders.Add(order);
         await _context.SaveChangesAsync();
 
-        return await GetOrderByIdAsync(order.Id);
+        return await GetOrderByIdAsync(order.Id)
+    ?? throw new InvalidOperationException($"Заказ с ID {order.Id} не найден после создания");
     }
 
     public async Task<OrderResponseDto?> GetOrderByIdAsync(int id)
@@ -97,7 +88,7 @@ public class OrderService
             .Include(o => o.Items)
                 .ThenInclude(i => i.Bouquet)
             .Include(o => o.Delivery)
-                .ThenInclude(d => d.Courier)
+                .ThenInclude(d => d!.Courier)
             .FirstOrDefaultAsync(o => o.Id == id);
 
         if (order == null)
@@ -116,10 +107,9 @@ public class OrderService
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync();
 
-        return orders.Select(MapToResponseDto).ToList();
+        return [.. orders.Select(MapToResponseDto)];
     }
 
-    // Обновление заказа
     public async Task<OrderResponseDto?> UpdateOrderAsync(int id, UpdateOrderDto dto)
     {
         var order = await _context.Orders
@@ -165,7 +155,6 @@ public class OrderService
         if (order == null)
             return null;
 
-        // Можно оплатить только созданный заказ
         if (order.Status != OrderStatus.Created)
         {
             throw new InvalidOperationException($"Нельзя оплатить заказ со статусом {order.Status}. Заказ должен быть в статусе Created");
@@ -177,7 +166,6 @@ public class OrderService
         return await GetOrderByIdAsync(id);
     }
 
-    // Подготовка заказа флористом
     public async Task<OrderResponseDto?> PrepareOrderAsync(int id)
     {
         var order = await _context.Orders
@@ -187,7 +175,7 @@ public class OrderService
         if (order == null)
             return null;
 
-        // Подготовить можно только оплаченный заказ
+
         if (order.Status != OrderStatus.Paid)
         {
             throw new InvalidOperationException($"Нельзя подготовить заказ со статусом {order.Status}. Заказ должен быть в статусе Paid");
@@ -210,13 +198,13 @@ public class OrderService
             RecipientName = order.RecipientName,
             RecipientPhone = order.RecipientPhone,
             ClientId = order.ClientId,
-            Items = order.Items.Select(i => new OrderItemResponseDto
+            Items = [.. order.Items.Select(i => new OrderItemResponseDto
             {
                 BouquetId = i.BouquetId,
                 BouquetName = i.Bouquet.Name,
                 Quantity = i.Quantity,
                 Price = i.Price
-            }).ToList(),
+            })],
             Delivery = order.Delivery != null ? new DeliveryResponseDto
             {
                 Id = order.Delivery.Id,

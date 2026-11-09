@@ -1,14 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using FlowerDelivery.Domain.Entities;
 
-namespace FlowerDelivery.Infrastructure.Data;
+namespace FlowerDelivery.Infrastructure;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
-    {
-    }
-
     public DbSet<User> Users { get; set; }
     public DbSet<Client> Clients { get; set; }
     public DbSet<Courier> Couriers { get; set; }
@@ -22,10 +18,11 @@ public class ApplicationDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.Entity<User>()
-            .HasDiscriminator<string>("Role")
+            .HasDiscriminator<string>(u => u.Role)
             .HasValue<User>("User")
             .HasValue<Client>("Client")
-            .HasValue<Courier>("Courier");
+            .HasValue<Courier>("Courier")
+            .HasValue<User>("Admin");
 
         modelBuilder.Entity<Order>()
             .HasOne(o => o.Client)

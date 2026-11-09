@@ -12,7 +12,7 @@ public class Order
     public int ClientId { get; set; }
     public Client Client { get; set; } = null!;
 
-    public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
+    public ICollection<OrderItem> Items { get; set; } = [];
     public Delivery? Delivery { get; set; }
 }
 

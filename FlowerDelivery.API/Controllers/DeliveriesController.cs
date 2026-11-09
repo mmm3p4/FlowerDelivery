@@ -1,22 +1,25 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using FlowerDelivery.Domain.Entities;
+using FlowerDelivery.Infrastructure;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using FlowerDelivery.Infrastructure.Data;
-using FlowerDelivery.Domain.Entities;
+using System.Security.Claims;
 
 namespace FlowerDelivery.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class DeliveriesController : ControllerBase
+[Authorize] // Все методы требуют авторизации
+public class DeliveriesController(ApplicationDbContext context) : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
+    private readonly ApplicationDbContext _context = context;
 
-    public DeliveriesController(ApplicationDbContext context)
-    {
-        _context = context;
-    }
+    // Вспомогательные методы для проверки прав
+    private int GetCurrentUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+    private bool IsAdmin() => User.IsInRole("Admin");
 
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<Delivery>>> GetAllDeliveries()
     {
         var deliveries = await _context.Deliveries
@@ -27,12 +30,17 @@ public class DeliveriesController : ControllerBase
         return Ok(deliveries);
     }
 
-    [HttpGet("courier/{courierId}")]
-    public async Task<ActionResult<List<Delivery>>> GetDeliveriesByCourier(int courierId)
+    // Курьер запрашивает ТОЛЬКО свои доставки (ID берется из токена, а не из URL)
+    [HttpGet("my")]
+    [Authorize(Roles = "Courier")]
+    public async Task<ActionResult<List<Delivery>>> GetMyDeliveries()
     {
+        var courierId = GetCurrentUserId();
+
         var deliveries = await _context.Deliveries
             .Where(d => d.CourierId == courierId)
             .Include(d => d.Order)
+            .OrderByDescending(d => d.DeliveryTime)
             .ToListAsync();
 
         return Ok(deliveries);
@@ -51,10 +59,24 @@ public class DeliveriesController : ControllerBase
             return NotFound(new { message = "Доставка не найдена" });
         }
 
+        // Проверка прав: Админ видит всё, остальные — только если они курьер этой доставки или клиент этого заказа
+        if (!IsAdmin())
+        {
+            var userId = GetCurrentUserId();
+            bool isAssignedCourier = delivery.CourierId == userId;
+            bool isOrderClient = delivery.Order?.ClientId == userId;
+
+            if (!isAssignedCourier && !isOrderClient)
+            {
+                return Forbid();
+            }
+        }
+
         return Ok(delivery);
     }
 
     [HttpPut("{id}/assign-courier")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> AssignCourier(int id, [FromBody] AssignCourierDto dto)
     {
         var delivery = await _context.Deliveries
@@ -63,17 +85,21 @@ public class DeliveriesController : ControllerBase
 
         if (delivery == null)
         {
-            return NotFound();
+            return NotFound(new { message = "Доставка не найдена" });
         }
 
         var courier = await _context.Couriers.FindAsync(dto.CourierId);
-        if (courier == null || courier.Status != CourierStatus.Free)
+        if (courier == null)
         {
-            return BadRequest(new { message = "Курьер не найден или уже занят" });
+            return BadRequest(new { message = "Курьер не найден" });
+        }
+
+        if (courier.Status != CourierStatus.Free)
+        {
+            return BadRequest(new { message = "Курьер уже занят другой доставкой" });
         }
 
         delivery.CourierId = dto.CourierId;
-
         courier.Status = CourierStatus.Busy;
 
         if (delivery.Order != null)
@@ -87,6 +113,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpPut("{id}/confirm")]
+    [Authorize(Roles = "Courier")]
     public async Task<IActionResult> ConfirmDelivery(int id)
     {
         var delivery = await _context.Deliveries
@@ -96,7 +123,13 @@ public class DeliveriesController : ControllerBase
 
         if (delivery == null)
         {
-            return NotFound();
+            return NotFound(new { message = "Доставка не найдена" });
+        }
+
+        // Курьер может подтвердить ТОЛЬКО свою доставку
+        if (delivery.CourierId != GetCurrentUserId())
+        {
+            return Forbid();
         }
 
         if (delivery.Order != null)
@@ -115,6 +148,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpPut("{id}/return")]
+    [Authorize(Roles = "Courier,Admin")]
     public async Task<IActionResult> ReturnDelivery(int id)
     {
         var delivery = await _context.Deliveries
@@ -124,7 +158,13 @@ public class DeliveriesController : ControllerBase
 
         if (delivery == null)
         {
-            return NotFound();
+            return NotFound(new { message = "Доставка не найдена" });
+        }
+
+        // Курьер может вернуть ТОЛЬКО свою доставку
+        if (!IsAdmin() && delivery.CourierId != GetCurrentUserId())
+        {
+            return Forbid();
         }
 
         if (delivery.Order != null)
@@ -143,6 +183,7 @@ public class DeliveriesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteDelivery(int id)
     {
         var delivery = await _context.Deliveries
@@ -168,6 +209,7 @@ public class DeliveriesController : ControllerBase
     }
 }
 
+// DTO можно оставить здесь или перенести в папку FlowerDelivery.Application.DTOs
 public class AssignCourierDto
 {
     public int CourierId { get; set; }
